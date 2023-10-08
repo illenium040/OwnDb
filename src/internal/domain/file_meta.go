@@ -7,6 +7,7 @@ import (
 type FileMeta struct {
 	id           uint
 	dataId       uint
+	name         string
 	extension    string
 	originalPath string
 	size         uint32
@@ -17,21 +18,23 @@ type FileMeta struct {
 func NewFileMeta(
 	id uint,
 	dataId uint,
+	name string,
 	extension string,
 	originalPath string,
 	size uint32,
 	createdAt time.Time,
 	changedAt *time.Time,
-) (FileMeta, error) {
+) FileMeta {
 	return FileMeta{
 		id:           id,
 		dataId:       dataId,
+		name:         name,
 		extension:    extension,
 		originalPath: originalPath,
 		size:         size,
 		createdAt:    createdAt,
 		changedAt:    changedAt,
-	}, nil
+	}
 }
 
 func (f FileMeta) Id() uint {
@@ -40,6 +43,10 @@ func (f FileMeta) Id() uint {
 
 func (f FileMeta) DataId() uint {
 	return f.dataId
+}
+
+func (f FileMeta) Name() string {
+	return f.name
 }
 
 func (f FileMeta) Extension() string {
