@@ -1,14 +1,15 @@
 package main
 
 import (
-	"OwnDb/src/config"
 	"context"
 	"fmt"
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v5"
 	"log"
 	"os"
 	"os/signal"
+	"own-db/src/internal/config"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -24,13 +25,9 @@ func run() error {
 		return fmt.Errorf("reading config: %w", err)
 	}
 
-	con, err := pgx.Connect(pgx.ConnConfig{
-		User:     cfg.DbUser(),
-		Password: cfg.DbPassword(),
-		Host:     cfg.DbHost(),
-		Database: cfg.DbName(),
-		Port:     cfg.DbPort(),
-	})
+	ctx := context.Background()
+
+	con, err := pgx.Connect(ctx, cfg.DbUrl())
 	if err != nil {
 		return fmt.Errorf("db connection: %w", err)
 	}
@@ -41,7 +38,10 @@ func run() error {
 		signal.Notify(sigint, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 		<-sigint
 
-		err := con.Close()
+		ctxWithTimeout, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		err := con.Close(ctxWithTimeout)
 		if err != nil {
 			log.Printf("db close: %v", err)
 		}

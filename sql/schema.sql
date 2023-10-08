@@ -12,7 +12,7 @@ create table main.file_meta (
     original_path text not null,
     size bigint not null,
     dt_created date not null,
-    dt_changed date not null,
+    dt_changed date,
     foreign key (file_data_id) references main.file_data(id),
     constraint check_input check (
         extension != ''
