@@ -3,11 +3,11 @@ package main
 import (
 	"OwnDb/src/config"
 	"context"
+	"fmt"
 	"github.com/jackc/pgx"
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 )
 
@@ -21,12 +21,7 @@ func main() {
 func run() error {
 	cfg, err := config.Read()
 	if err != nil {
-		log.Fatalf("reading config: %v", err)
-	}
-
-	port, err := strconv.Atoi(cfg.DbPort())
-	if err != nil {
-		log.Fatalf("port in not a number: port=%s", cfg.DbPort())
+		return fmt.Errorf("reading config: %w", err)
 	}
 
 	con, err := pgx.Connect(pgx.ConnConfig{
@@ -34,10 +29,10 @@ func run() error {
 		Password: cfg.DbPassword(),
 		Host:     cfg.DbHost(),
 		Database: cfg.DbName(),
-		Port:     uint16(port),
+		Port:     cfg.DbPort(),
 	})
 	if err != nil {
-		log.Fatalf("db connection: %v", err)
+		return fmt.Errorf("db connection: %w", err)
 	}
 
 	stopped := make(chan struct{})
@@ -48,14 +43,14 @@ func run() error {
 
 		err := con.Close()
 		if err != nil {
-			log.Printf("HTTP Server Shutdown Error: %v", err)
+			log.Printf("db close: %v", err)
 		}
 		close(stopped)
 	}()
 
 	err = con.Ping(context.Background())
 	if err != nil {
-		log.Fatalf("db ping: %v", err)
+		return fmt.Errorf("db ping: %w", err)
 	}
 
 	<-stopped
