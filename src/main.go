@@ -80,7 +80,6 @@ func run() error {
 		return fmt.Errorf("db ping: %w", err)
 	}
 
-	fmt.Println("server started")
 	err = httpServer.ListenAndServe()
 	if err != nil {
 		log.Printf("db close: %v", err)
