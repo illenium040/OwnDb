@@ -44,7 +44,7 @@ func (s FileService) AddFile(ctx context.Context, selectedPath string) (fileId u
 		nil,
 	)
 
-	_, err = s.repo.AddFile(ctx, fileMeta, file)
+	fileId, err = s.repo.AddFile(ctx, fileMeta, file)
 	if err != nil {
 		return 0, fmt.Errorf("add file: %w", err)
 	}
