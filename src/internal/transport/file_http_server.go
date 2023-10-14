@@ -21,7 +21,7 @@ func NewFileServer(service FileService) FileServer {
 	return FileServer{service: service}
 }
 
-func (s FileServer) AddFile(ctx *gin.Context) {
+func (s FileServer) UploadFile(ctx *gin.Context) {
 	type path struct {
 		SelectedPath string `json:"selected_path"`
 	}

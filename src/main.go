@@ -51,7 +51,7 @@ func run() error {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	router.POST("/api/v1/file/add", fileServer.AddFile)
+	router.POST("/api/v1/file/add", fileServer.UploadFile)
 	router.GET("api/v1/file/:id", fileServer.DownloadFile)
 
 	stopped := make(chan struct{})
