@@ -10,8 +10,9 @@ import (
 )
 
 type Repository interface {
-	AddFile(ctx context.Context, file domain.FileMeta, fileReader io.Reader) (id uint, err error)
+	AddFile(ctx context.Context, folderId int, file domain.FileMeta, fileReader io.Reader) (id uint, err error)
 	ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error
+	DeleteFile(ctx context.Context, id uint) error
 }
 
 type FileService struct {
@@ -22,7 +23,7 @@ func NewFileService(repo Repository) FileService {
 	return FileService{repo: repo}
 }
 
-func (s FileService) AddFile(ctx context.Context, selectedPath string) (fileId uint, err error) {
+func (s FileService) AddFile(ctx context.Context, folderId int, selectedPath string) (fileId uint, err error) {
 	file, err := os.OpenFile(selectedPath, os.O_RDONLY, 0400)
 	if err != nil {
 		return 0, fmt.Errorf("open file: %w", err)
@@ -44,7 +45,7 @@ func (s FileService) AddFile(ctx context.Context, selectedPath string) (fileId u
 		nil,
 	)
 
-	fileId, err = s.repo.AddFile(ctx, fileMeta, file)
+	fileId, err = s.repo.AddFile(ctx, folderId, fileMeta, file)
 	if err != nil {
 		return 0, fmt.Errorf("add file: %w", err)
 	}
@@ -75,6 +76,15 @@ func (s FileService) DownloadFile(ctx context.Context, fileId uint, selectedPath
 	})
 	if err != nil {
 		return fmt.Errorf("reading file: %w", err)
+	}
+
+	return nil
+}
+
+func (s FileService) DeleteFile(ctx context.Context, fileId uint) (err error) {
+	err = s.repo.DeleteFile(ctx, fileId)
+	if err != nil {
+		return fmt.Errorf("deleting file: %w", err)
 	}
 
 	return nil

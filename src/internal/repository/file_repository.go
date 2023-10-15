@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"io"
 	"own-db/src/internal/domain"
+	"own-db/src/internal/utils/db"
 )
 
 type FileRepository struct {
@@ -18,110 +19,86 @@ func NewFileRepository(con *pgx.Conn) FileRepository {
 	return FileRepository{con: con}
 }
 
-func (r FileRepository) AddFile(ctx context.Context, file domain.FileMeta, fileReader io.Reader) (id uint, err error) {
-	tx, err := r.con.Begin(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("begin tx: %w", err)
-	}
+func (r FileRepository) AddFile(ctx context.Context, folderId int, file domain.FileMeta, fileReader io.Reader) (id uint, err error) {
+	err = db.Tx(ctx, r.con, func(tx pgx.Tx) error {
+		loStorage := tx.LargeObjects()
 
-	defer func() {
+		loId, err := loStorage.Create(ctx, 0)
 		if err != nil {
-			rollbackErr := tx.Rollback(ctx)
-			if rollbackErr != nil {
-				err = fmt.Errorf("rollback error: %v, original error: %w", rollbackErr, err)
-			}
+			return fmt.Errorf("creating large object: %w", err)
 		}
-	}()
 
-	loStorage := tx.LargeObjects()
+		lo, err := loStorage.Open(ctx, loId, pgx.LargeObjectModeWrite)
+		if err != nil {
+			return fmt.Errorf("opening large object: %w", err)
+		}
 
-	loId, err := loStorage.Create(ctx, 0)
-	if err != nil {
-		return 0, fmt.Errorf("creating large object: %w", err)
-	}
+		hash := sha256.New()
+		teeReader := io.TeeReader(fileReader, hash)
 
-	lo, err := loStorage.Open(ctx, loId, pgx.LargeObjectModeWrite)
-	if err != nil {
-		return 0, fmt.Errorf("opening large object: %w", err)
-	}
+		_, err = io.Copy(lo, teeReader)
+		if err != nil {
+			return fmt.Errorf("copying data to db large object from file: %w", err)
+		}
 
-	hash := sha256.New()
-	teeReader := io.TeeReader(fileReader, hash)
-
-	_, err = io.Copy(lo, teeReader)
-	if err != nil {
-		return 0, fmt.Errorf("copying data to db large object from file: %w", err)
-	}
-
-	var dataId uint
-	err = r.con.QueryRow(
-		ctx,
-		`
+		var dataId uint
+		err = r.con.QueryRow(
+			ctx,
+			`
 			insert into main.file_data (hash, data_oid)
 			values (@hash, @oid)
 			returning id
 		`,
-		pgx.NamedArgs{
-			"hash": base64.URLEncoding.EncodeToString(hash.Sum(nil)),
-			"oid":  loId,
-		},
-	).Scan(&dataId)
-	if err != nil {
-		return 0, fmt.Errorf("inserting file data row: %w", err)
-	}
+			pgx.NamedArgs{
+				"hash": base64.URLEncoding.EncodeToString(hash.Sum(nil)),
+				"oid":  loId,
+			},
+		).Scan(&dataId)
+		if err != nil {
+			return fmt.Errorf("inserting file data row: %w", err)
+		}
 
-	fm := fileMetaFromDomain(file)
-	err = r.con.QueryRow(
-		ctx,
-		`
-			insert into main.file_meta (file_data_id, name, extension, original_path, size, dt_created, dt_changed)
-			values (@dataId, @name, @extension, @originalPath, @size, @dtCreated, @dtChanged)
+		fm := fileMetaFromDomain(file)
+		err = r.con.QueryRow(
+			ctx,
+			`
+			insert into main.file_meta (file_data_id, folder_id, name, extension, original_path, size, dt_created, dt_changed)
+			values (@dataId, @folderId, @name, @extension, @originalPath, @size, @dtCreated, @dtChanged)
 			returning id
 		`,
-		pgx.NamedArgs{
-			"dataId":       dataId,
-			"name":         fm.Name,
-			"extension":    fm.Extension,
-			"originalPath": fm.OriginalPath,
-			"size":         fm.Size,
-			"dtCreated":    fm.CreatedAt,
-			"dtChanged":    fm.ChangedAt,
-		},
-	).Scan(&id)
-	if err != nil {
-		return 0, fmt.Errorf("inserting file data row: %w", err)
-	}
+			pgx.NamedArgs{
+				"dataId":       dataId,
+				"folderId":     folderId,
+				"name":         fm.Name,
+				"extension":    fm.Extension,
+				"originalPath": fm.OriginalPath,
+				"size":         fm.Size,
+				"dtCreated":    fm.CreatedAt,
+				"dtChanged":    fm.ChangedAt,
+			},
+		).Scan(&id)
+		if err != nil {
+			return fmt.Errorf("inserting file data row: %w", err)
+		}
 
-	err = tx.Commit(ctx)
+		return nil
+	})
 	if err != nil {
-		return 0, fmt.Errorf("commit tx: %w", err)
+		return 0, err
 	}
 
 	return id, nil
 }
 
 func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error {
-	tx, err := r.con.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
+	return db.Tx(ctx, r.con, func(tx pgx.Tx) (err error) {
+		loStorage := tx.LargeObjects()
 
-	defer func() {
-		if err != nil {
-			rollbackErr := tx.Rollback(ctx)
-			if rollbackErr != nil {
-				err = fmt.Errorf("rollback error: %v, original error: %w", rollbackErr, err)
-			}
-		}
-	}()
-
-	loStorage := tx.LargeObjects()
-
-	var loId uint32
-	var fm fileMeta
-	err = r.con.QueryRow(
-		ctx,
-		`
+		var loId uint32
+		var fm fileMeta
+		err = r.con.QueryRow(
+			ctx,
+			`
 			select 
 			    fd.data_oid,
 			    fm.id,
@@ -137,38 +114,85 @@ func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta 
 			        on fd.id = fm.file_data_id
 			where fd.id = @id
 		`,
-		pgx.NamedArgs{
-			"id": id,
-		},
-	).Scan(
-		&loId,
-		&fm.Id,
-		&fm.DataId,
-		&fm.Name,
-		&fm.Extension,
-		&fm.OriginalPath,
-		&fm.Size,
-		&fm.CreatedAt,
-		&fm.ChangedAt,
-	)
-	if err != nil {
-		return fmt.Errorf("getting loId by file id: %w", err)
-	}
+			pgx.NamedArgs{
+				"id": id,
+			},
+		).Scan(
+			&loId,
+			&fm.Id,
+			&fm.DataId,
+			&fm.Name,
+			&fm.Extension,
+			&fm.OriginalPath,
+			&fm.Size,
+			&fm.CreatedAt,
+			&fm.ChangedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("getting loId by file id: %w", err)
+		}
 
-	lo, err := loStorage.Open(ctx, loId, pgx.LargeObjectModeRead)
-	if err != nil {
-		return fmt.Errorf("opening large object with id=%d: %w", loId, err)
-	}
+		lo, err := loStorage.Open(ctx, loId, pgx.LargeObjectModeRead)
+		if err != nil {
+			return fmt.Errorf("opening large object with id=%d: %w", loId, err)
+		}
 
-	err = readFn(fileMetaToDomain(fm), lo)
-	if err != nil {
-		return fmt.Errorf("reading large object: %w", err)
-	}
+		err = readFn(fileMetaToDomain(fm), lo)
+		if err != nil {
+			return fmt.Errorf("reading large object: %w", err)
+		}
 
-	err = tx.Commit(ctx)
-	if err != nil {
-		return fmt.Errorf("commit tx: %w", err)
-	}
+		return nil
+	})
+}
 
-	return nil
+func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
+	return db.Tx(ctx, r.con, func(tx pgx.Tx) error {
+		_, err := r.con.Exec(
+			ctx,
+			`select lo_unlink(
+				( 
+					select fm.file_data_id
+					from main.file_meta fm
+					where fm.id = @id
+				)
+			)`,
+			pgx.NamedArgs{
+				"id": id,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("unlink large object: %w", err)
+		}
+
+		_, err = r.con.Exec(
+			ctx,
+			`delete from main.file_data
+			where id = (
+			    select fm.file_data_id
+			    from main.file_meta fm
+			    where fm.id = @id
+			)`,
+			pgx.NamedArgs{
+				"id": id,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("delete file data: %w", err)
+		}
+
+		_, err = r.con.Exec(
+			ctx,
+			`delete from main.file_meta
+			where id = @id`,
+			pgx.NamedArgs{
+				"id": id,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("delete file meta: %w", err)
+		}
+
+		return nil
+	})
 }
