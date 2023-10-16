@@ -42,13 +42,13 @@ func (r FileRepository) AddFile(ctx context.Context, folderId int, file domain.F
 		}
 
 		var dataId uint
-		err = r.con.QueryRow(
+		err = tx.QueryRow(
 			ctx,
 			`
 			insert into main.file_data (hash, data_oid)
 			values (@hash, @oid)
 			returning id
-		`,
+			`,
 			pgx.NamedArgs{
 				"hash": base64.URLEncoding.EncodeToString(hash.Sum(nil)),
 				"oid":  loId,
@@ -59,13 +59,13 @@ func (r FileRepository) AddFile(ctx context.Context, folderId int, file domain.F
 		}
 
 		fm := fileMetaFromDomain(file)
-		err = r.con.QueryRow(
+		err = tx.QueryRow(
 			ctx,
 			`
 			insert into main.file_meta (file_data_id, folder_id, name, extension, original_path, size, dt_created, dt_changed)
 			values (@dataId, @folderId, @name, @extension, @originalPath, @size, @dtCreated, @dtChanged)
 			returning id
-		`,
+			`,
 			pgx.NamedArgs{
 				"dataId":       dataId,
 				"folderId":     folderId,
@@ -96,7 +96,7 @@ func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta 
 
 		var loId uint32
 		var fm fileMeta
-		err = r.con.QueryRow(
+		err = tx.QueryRow(
 			ctx,
 			`
 			select 
@@ -113,7 +113,7 @@ func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta 
 			    inner join main.file_data fd 
 			        on fd.id = fm.file_data_id
 			where fd.id = @id
-		`,
+			`,
 			pgx.NamedArgs{
 				"id": id,
 			},
@@ -148,7 +148,7 @@ func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta 
 
 func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
 	return db.Tx(ctx, r.con, func(tx pgx.Tx) error {
-		_, err := r.con.Exec(
+		_, err := tx.Exec(
 			ctx,
 			`select lo_unlink(
 				( 
@@ -165,7 +165,7 @@ func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
 			return fmt.Errorf("unlink large object: %w", err)
 		}
 
-		_, err = r.con.Exec(
+		_, err = tx.Exec(
 			ctx,
 			`delete from main.file_data
 			where id = (
@@ -181,7 +181,7 @@ func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
 			return fmt.Errorf("delete file data: %w", err)
 		}
 
-		_, err = r.con.Exec(
+		_, err = tx.Exec(
 			ctx,
 			`delete from main.file_meta
 			where id = @id`,
