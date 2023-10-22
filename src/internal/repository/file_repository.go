@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"io"
 	"own-db/src/internal/domain"
+	"own-db/src/internal/dto"
 	"own-db/src/internal/utils/db"
 )
 
@@ -19,7 +20,7 @@ func NewFileRepository(con *pgx.Conn) FileRepository {
 	return FileRepository{con: con}
 }
 
-func (r FileRepository) AddFile(ctx context.Context, folderId int, file domain.FileMeta, fileReader io.Reader) (id uint, err error) {
+func (r FileRepository) AddFile(ctx context.Context, folderId *int, file dto.FileMeta, fileReader io.Reader) (id uint, err error) {
 	err = db.Tx(ctx, r.con, func(tx pgx.Tx) error {
 		loStorage := tx.LargeObjects()
 
@@ -58,7 +59,6 @@ func (r FileRepository) AddFile(ctx context.Context, folderId int, file domain.F
 			return fmt.Errorf("inserting file data row: %w", err)
 		}
 
-		fm := fileMetaFromDomain(file)
 		err = tx.QueryRow(
 			ctx,
 			`
@@ -69,12 +69,12 @@ func (r FileRepository) AddFile(ctx context.Context, folderId int, file domain.F
 			pgx.NamedArgs{
 				"dataId":       dataId,
 				"folderId":     folderId,
-				"name":         fm.Name,
-				"extension":    fm.Extension,
-				"originalPath": fm.OriginalPath,
-				"size":         fm.Size,
-				"dtCreated":    fm.CreatedAt,
-				"dtChanged":    fm.ChangedAt,
+				"name":         file.Name,
+				"extension":    file.Extension,
+				"originalPath": file.OriginalPath,
+				"size":         file.Size,
+				"dtCreated":    file.CreatedAt,
+				"dtChanged":    file.ChangedAt,
 			},
 		).Scan(&id)
 		if err != nil {
@@ -152,9 +152,10 @@ func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
 			ctx,
 			`select lo_unlink(
 				( 
-					select fm.file_data_id
-					from main.file_meta fm
-					where fm.id = @id
+					select fd.data_oid
+					from main.file_data fd
+						inner join main.file_meta f on fd.id = f.file_data_id
+					where f.id = @id
 				)
 			)`,
 			pgx.NamedArgs{
@@ -165,32 +166,30 @@ func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
 			return fmt.Errorf("unlink large object: %w", err)
 		}
 
-		_, err = tx.Exec(
+		var fileDataId int
+		err = tx.QueryRow(
 			ctx,
-			`delete from main.file_data
-			where id = (
-			    select fm.file_data_id
-			    from main.file_meta fm
-			    where fm.id = @id
-			)`,
+			`delete from main.file_meta
+			where id = @id
+			returning file_data_id`,
 			pgx.NamedArgs{
 				"id": id,
 			},
-		)
+		).Scan(&fileDataId)
 		if err != nil {
-			return fmt.Errorf("delete file data: %w", err)
+			return fmt.Errorf("delete file meta: %w", err)
 		}
 
 		_, err = tx.Exec(
 			ctx,
-			`delete from main.file_meta
+			`delete from main.file_data 
 			where id = @id`,
 			pgx.NamedArgs{
-				"id": id,
+				"id": fileDataId,
 			},
 		)
 		if err != nil {
-			return fmt.Errorf("delete file meta: %w", err)
+			return fmt.Errorf("delete file data: %w", err)
 		}
 
 		return nil

@@ -6,11 +6,12 @@ import (
 	"io"
 	"os"
 	"own-db/src/internal/domain"
+	"own-db/src/internal/dto"
 	"path/filepath"
 )
 
 type Repository interface {
-	AddFile(ctx context.Context, folderId int, file domain.FileMeta, fileReader io.Reader) (id uint, err error)
+	AddFile(ctx context.Context, folderId *int, file dto.FileMeta, fileReader io.Reader) (id uint, err error)
 	ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error
 	DeleteFile(ctx context.Context, id uint) error
 }
@@ -34,18 +35,21 @@ func (s FileService) AddFile(ctx context.Context, folderId int, selectedPath str
 		return 0, fmt.Errorf("get file stat: %w", err)
 	}
 
-	fileMeta := domain.NewFileMeta(
-		0,
-		0,
-		stat.Name(),
-		filepath.Ext(selectedPath),
-		selectedPath,
-		uint32(stat.Size()),
-		stat.ModTime(),
-		nil,
-	)
+	fileMeta := dto.FileMeta{
+		Name:         stat.Name(),
+		Extension:    filepath.Ext(selectedPath),
+		OriginalPath: selectedPath,
+		Size:         uint32(stat.Size()),
+		CreatedAt:    stat.ModTime(),
+		ChangedAt:    nil,
+	}
 
-	fileId, err = s.repo.AddFile(ctx, folderId, fileMeta, file)
+	var folderIdPt *int
+	if folderId > 0 {
+		folderIdPt = &folderId
+	}
+
+	fileId, err = s.repo.AddFile(ctx, folderIdPt, fileMeta, file)
 	if err != nil {
 		return 0, fmt.Errorf("add file: %w", err)
 	}
