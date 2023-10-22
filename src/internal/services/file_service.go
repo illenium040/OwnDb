@@ -14,7 +14,7 @@ type Repository interface {
 	AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (id uint, err error)
 	ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error
 	DeleteFile(ctx context.Context, id uint) error
-	GetFileList(ctx context.Context, folderId *int) (fileList []domain.FileMeta, err error)
+	GetFileList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error)
 }
 
 type FileService struct {
