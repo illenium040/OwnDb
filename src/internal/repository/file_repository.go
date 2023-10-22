@@ -20,7 +20,7 @@ func NewFileRepository(con *pgx.Conn) FileRepository {
 	return FileRepository{con: con}
 }
 
-func (r FileRepository) AddFile(ctx context.Context, folderId *int, file dto.FileMeta, fileReader io.Reader) (id uint, err error) {
+func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (id uint, err error) {
 	err = db.Tx(ctx, r.con, func(tx pgx.Tx) error {
 		loStorage := tx.LargeObjects()
 
@@ -68,7 +68,7 @@ func (r FileRepository) AddFile(ctx context.Context, folderId *int, file dto.Fil
 			`,
 			pgx.NamedArgs{
 				"dataId":       dataId,
-				"folderId":     folderId,
+				"folderId":     file.FolderId.Value(),
 				"name":         file.Name,
 				"extension":    file.Extension,
 				"originalPath": file.OriginalPath,
@@ -103,6 +103,7 @@ func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta 
 			    fd.data_oid,
 			    fm.id,
 			    fm.file_data_id,
+			    fm.folder_id,
 			    fm.name,
 			    fm.extension,
 			    fm.original_path,
@@ -121,6 +122,7 @@ func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta 
 			&loId,
 			&fm.Id,
 			&fm.DataId,
+			&fm.FolderId,
 			&fm.Name,
 			&fm.Extension,
 			&fm.OriginalPath,
@@ -194,4 +196,51 @@ func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
 
 		return nil
 	})
+}
+
+func (r FileRepository) GetFileList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error) {
+	rows, err := r.con.Query(
+		ctx,
+		`select 
+			id, 
+			file_data_id, 
+			folder_id, 
+			name, 
+			extension, 
+			original_path, 
+			size, 
+			dt_created, 
+			dt_changed
+		from main.file_meta 
+		where folder_id = @folderId
+		`,
+		pgx.NamedArgs{
+			"folderId": folderId.Value(),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get file list query: %w", err)
+	}
+
+	for rows.Next() {
+		var fm fileMeta
+		err = rows.Scan(
+			&fm.Id,
+			&fm.DataId,
+			&fm.FolderId,
+			&fm.Name,
+			&fm.Extension,
+			&fm.OriginalPath,
+			&fm.Size,
+			&fm.CreatedAt,
+			&fm.ChangedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan file meta: %w", err)
+		}
+
+		fileList = append(fileList, fileMetaToDomain(fm))
+	}
+
+	return fileList, nil
 }

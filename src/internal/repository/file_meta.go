@@ -8,6 +8,7 @@ import (
 type fileMeta struct {
 	Id           uint
 	DataId       uint
+	FolderId     *int
 	Name         string
 	Extension    string
 	OriginalPath string
@@ -20,6 +21,7 @@ func fileMetaToDomain(fm fileMeta) domain.FileMeta {
 	return domain.NewFileMeta(
 		fm.Id,
 		fm.DataId,
+		fm.FolderId,
 		fm.Name,
 		fm.Extension,
 		fm.OriginalPath,
@@ -33,6 +35,7 @@ func fileMetaFromDomain(fm domain.FileMeta) (res fileMeta) {
 	return fileMeta{
 		Id:           fm.Id(),
 		DataId:       fm.DataId(),
+		FolderId:     fm.FolderId(),
 		Name:         fm.Name(),
 		Extension:    fm.Extension(),
 		OriginalPath: fm.OriginalPath(),

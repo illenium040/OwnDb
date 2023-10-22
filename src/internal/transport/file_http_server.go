@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"own-db/src/internal/domain"
 	"strconv"
 )
 
 type FileService interface {
-	AddFile(ctx context.Context, folderId int, selectedPath string) (fileId uint, err error)
+	AddFile(ctx context.Context, folderId domain.FolderId, selectedPath string) (fileId uint, err error)
 	DownloadFile(ctx context.Context, fileId uint, selectedPath string) (err error)
 	DeleteFile(ctx context.Context, fileId uint) (err error)
 }
@@ -40,7 +41,7 @@ func (s FileServer) UploadFile(ctx *gin.Context) {
 		return
 	}
 
-	id, err := s.service.AddFile(ctx.Request.Context(), folderId, data.SelectedPath)
+	id, err := s.service.AddFile(ctx.Request.Context(), domain.NewFolderId(folderId), data.SelectedPath)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("adding file: %w", err))
 		return

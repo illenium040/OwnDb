@@ -11,9 +11,10 @@ import (
 )
 
 type Repository interface {
-	AddFile(ctx context.Context, folderId *int, file dto.FileMeta, fileReader io.Reader) (id uint, err error)
+	AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (id uint, err error)
 	ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error
 	DeleteFile(ctx context.Context, id uint) error
+	GetFileList(ctx context.Context, folderId *int) (fileList []domain.FileMeta, err error)
 }
 
 type FileService struct {
@@ -24,7 +25,7 @@ func NewFileService(repo Repository) FileService {
 	return FileService{repo: repo}
 }
 
-func (s FileService) AddFile(ctx context.Context, folderId int, selectedPath string) (fileId uint, err error) {
+func (s FileService) AddFile(ctx context.Context, folderId domain.FolderId, selectedPath string) (fileId uint, err error) {
 	file, err := os.OpenFile(selectedPath, os.O_RDONLY, 0400)
 	if err != nil {
 		return 0, fmt.Errorf("open file: %w", err)
@@ -36,6 +37,7 @@ func (s FileService) AddFile(ctx context.Context, folderId int, selectedPath str
 	}
 
 	fileMeta := dto.FileMeta{
+		FolderId:     folderId,
 		Name:         stat.Name(),
 		Extension:    filepath.Ext(selectedPath),
 		OriginalPath: selectedPath,
@@ -44,12 +46,7 @@ func (s FileService) AddFile(ctx context.Context, folderId int, selectedPath str
 		ChangedAt:    nil,
 	}
 
-	var folderIdPt *int
-	if folderId > 0 {
-		folderIdPt = &folderId
-	}
-
-	fileId, err = s.repo.AddFile(ctx, folderIdPt, fileMeta, file)
+	fileId, err = s.repo.AddFile(ctx, fileMeta, file)
 	if err != nil {
 		return 0, fmt.Errorf("add file: %w", err)
 	}
