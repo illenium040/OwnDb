@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"io"
@@ -42,21 +43,45 @@ func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileRead
 			return fmt.Errorf("copying data to db large object from file: %w", err)
 		}
 
+		var hashBase64 = base64.URLEncoding.EncodeToString(hash.Sum(nil))
+
 		var dataId uint
 		err = tx.QueryRow(
 			ctx,
-			`
+			`select id
+			from main.file_data
+			where hash = @hash
+			`,
+			pgx.NamedArgs{
+				"hash": hashBase64,
+			},
+		).Scan(&dataId)
+		fmt.Println(err)
+		if !errors.Is(err, pgx.ErrNoRows) && err != nil {
+			return fmt.Errorf("checking hash: %w", err)
+		}
+
+		if dataId == 0 {
+			err = tx.QueryRow(
+				ctx,
+				`
 			insert into main.file_data (hash, data_oid)
 			values (@hash, @oid)
 			returning id
 			`,
-			pgx.NamedArgs{
-				"hash": base64.URLEncoding.EncodeToString(hash.Sum(nil)),
-				"oid":  loId,
-			},
-		).Scan(&dataId)
-		if err != nil {
-			return fmt.Errorf("inserting file data row: %w", err)
+				pgx.NamedArgs{
+					"hash": hashBase64,
+					"oid":  loId,
+				},
+			).Scan(&dataId)
+			if err != nil {
+				return fmt.Errorf("inserting file data row: %w", err)
+			}
+		} else {
+			err = loStorage.Unlink(ctx, loId)
+			if err != nil {
+				return fmt.Errorf("unlinking lo when data is already existing: %w", err)
+			}
 		}
 
 		err = tx.QueryRow(

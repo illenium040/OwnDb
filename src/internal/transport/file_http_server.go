@@ -13,6 +13,7 @@ type FileService interface {
 	AddFile(ctx context.Context, folderId domain.FolderId, selectedPath string) (fileId uint, err error)
 	DownloadFile(ctx context.Context, fileId uint, selectedPath string) (err error)
 	DeleteFile(ctx context.Context, fileId uint) (err error)
+	GetFileList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error)
 }
 
 type FileServer struct {
@@ -83,4 +84,25 @@ func (s FileServer) DeleteFile(ctx *gin.Context) {
 	}
 
 	ctx.Status(http.StatusOK)
+}
+
+func (s FileServer) GetFileList(ctx *gin.Context) {
+	folderId, err := strconv.Atoi(ctx.Param("folderId"))
+	if err != nil {
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("fileId is not a number: %w", err))
+		return
+	}
+
+	fileList, err := s.service.GetFileList(ctx, domain.NewFolderId(folderId))
+	if err != nil {
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("get file list of folder %d: %w", folderId, err))
+		return
+	}
+
+	var list []fileMeta
+	for _, fm := range fileList {
+		list = append(list, fileMetaFromDomain(fm))
+	}
+
+	ctx.JSON(200, list)
 }

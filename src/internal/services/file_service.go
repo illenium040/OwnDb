@@ -90,3 +90,12 @@ func (s FileService) DeleteFile(ctx context.Context, fileId uint) (err error) {
 
 	return nil
 }
+
+func (s FileService) GetFileList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error) {
+	fileList, err = s.repo.GetFileList(ctx, folderId)
+	if err != nil {
+		return nil, fmt.Errorf("getting file list: %w", err)
+	}
+
+	return fileList, nil
+}

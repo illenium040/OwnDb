@@ -53,6 +53,7 @@ func run() error {
 
 	router.POST("/api/v1/folder/:folderId/file/add", fileServer.UploadFile)
 	router.GET("/api/v1/file/:id", fileServer.DownloadFile)
+	router.GET("/api/v1/file/list/:folderId", fileServer.GetFileList)
 	router.DELETE("/api/v1/file/:id", fileServer.DeleteFile)
 
 	stopped := make(chan struct{})
