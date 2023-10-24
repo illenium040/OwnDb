@@ -11,7 +11,7 @@ import (
 )
 
 type Repository interface {
-	AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (id uint, err error)
+	AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (fm domain.FileMeta, err error)
 	ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error
 	DeleteFile(ctx context.Context, id uint) error
 	GetFileList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error)
@@ -25,15 +25,15 @@ func NewFileService(repo Repository) FileService {
 	return FileService{repo: repo}
 }
 
-func (s FileService) AddFile(ctx context.Context, folderId domain.FolderId, selectedPath string) (fileId uint, err error) {
+func (s FileService) AddFile(ctx context.Context, folderId domain.FolderId, selectedPath string) (fm domain.FileMeta, err error) {
 	file, err := os.OpenFile(selectedPath, os.O_RDONLY, 0400)
 	if err != nil {
-		return 0, fmt.Errorf("open file: %w", err)
+		return domain.FileMeta{}, fmt.Errorf("open file: %w", err)
 	}
 
 	stat, err := file.Stat()
 	if err != nil {
-		return 0, fmt.Errorf("get file stat: %w", err)
+		return domain.FileMeta{}, fmt.Errorf("get file stat: %w", err)
 	}
 
 	fileMeta := dto.FileMeta{
@@ -46,12 +46,12 @@ func (s FileService) AddFile(ctx context.Context, folderId domain.FolderId, sele
 		ChangedAt:    nil,
 	}
 
-	fileId, err = s.repo.AddFile(ctx, fileMeta, file)
+	fm, err = s.repo.AddFile(ctx, fileMeta, file)
 	if err != nil {
-		return 0, fmt.Errorf("add file: %w", err)
+		return domain.FileMeta{}, fmt.Errorf("add file: %w", err)
 	}
 
-	return fileId, nil
+	return fm, nil
 }
 
 func (s FileService) DownloadFile(ctx context.Context, fileId uint, selectedPath string) (err error) {

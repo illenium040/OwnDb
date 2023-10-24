@@ -10,7 +10,7 @@ import (
 )
 
 type FileService interface {
-	AddFile(ctx context.Context, folderId domain.FolderId, selectedPath string) (fileId uint, err error)
+	AddFile(ctx context.Context, folderId domain.FolderId, selectedPath string) (fm domain.FileMeta, err error)
 	DownloadFile(ctx context.Context, fileId uint, selectedPath string) (err error)
 	DeleteFile(ctx context.Context, fileId uint) (err error)
 	GetFileList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error)
@@ -42,15 +42,13 @@ func (s FileServer) UploadFile(ctx *gin.Context) {
 		return
 	}
 
-	id, err := s.service.AddFile(ctx.Request.Context(), domain.NewFolderId(folderId), data.SelectedPath)
+	fm, err := s.service.AddFile(ctx.Request.Context(), domain.NewFolderId(folderId), data.SelectedPath)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("adding file: %w", err))
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"fileId": id,
-	})
+	ctx.JSON(http.StatusOK, fileMetaFromDomain(fm))
 }
 
 func (s FileServer) DownloadFile(ctx *gin.Context) {

@@ -21,8 +21,9 @@ func NewFileRepository(con *pgx.Conn) FileRepository {
 	return FileRepository{con: con}
 }
 
-func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (id uint, err error) {
-	err = db.Tx(ctx, r.con, func(tx pgx.Tx) error {
+func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (domain.FileMeta, error) {
+	var fm fileMeta
+	err := db.Tx(ctx, r.con, func(tx pgx.Tx) error {
 		loStorage := tx.LargeObjects()
 
 		loId, err := loStorage.Create(ctx, 0)
@@ -88,7 +89,7 @@ func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileRead
 			`
 			insert into main.file_meta (file_data_id, folder_id, name, extension, original_path, size, dt_created, dt_changed)
 			values (@dataId, @folderId, @name, @extension, @originalPath, @size, @dtCreated, @dtChanged)
-			returning id
+			returning id, file_data_id, folder_id, name, extension, original_path, size, dt_created, dt_changed
 			`,
 			pgx.NamedArgs{
 				"dataId":       dataId,
@@ -100,7 +101,17 @@ func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileRead
 				"dtCreated":    file.CreatedAt,
 				"dtChanged":    file.ChangedAt,
 			},
-		).Scan(&id)
+		).Scan(
+			&fm.Id,
+			&fm.DataId,
+			&fm.FolderId,
+			&fm.Name,
+			&fm.Extension,
+			&fm.OriginalPath,
+			&fm.Size,
+			&fm.CreatedAt,
+			&fm.ChangedAt,
+		)
 		if err != nil {
 			return fmt.Errorf("inserting file data row: %w", err)
 		}
@@ -108,10 +119,10 @@ func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileRead
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return domain.FileMeta{}, err
 	}
 
-	return id, nil
+	return fileMetaToDomain(fm), nil
 }
 
 func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error {
