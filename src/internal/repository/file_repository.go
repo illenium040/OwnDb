@@ -56,7 +56,6 @@ func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileRead
 				"hash": hashBase64,
 			},
 		).Scan(&dataId)
-		fmt.Println(err)
 		if !errors.Is(err, pgx.ErrNoRows) && err != nil {
 			return fmt.Errorf("checking hash: %w", err)
 		}
