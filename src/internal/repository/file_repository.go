@@ -65,10 +65,10 @@ func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileRead
 			err = tx.QueryRow(
 				ctx,
 				`
-			insert into main.file_data (hash, data_oid)
-			values (@hash, @oid)
-			returning id
-			`,
+				insert into main.file_data (hash, data_oid)
+				values (@hash, @oid)
+				returning id
+				`,
 				pgx.NamedArgs{
 					"hash": hashBase64,
 					"oid":  loId,

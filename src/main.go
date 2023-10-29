@@ -39,7 +39,7 @@ func run() error {
 
 	fileRepo := repository.NewFileRepository(con)
 	fileService := services.NewFileService(fileRepo)
-	fileServer := transport.NewFileServer(fileService)
+	fileServer := transport.NewFileHandlers(fileService)
 
 	router := gin.Default()
 
@@ -51,10 +51,13 @@ func run() error {
 		MaxHeaderBytes: 1 << 20,
 	}
 
+	// files
 	router.POST("/api/v1/folder/:folderId/file/add", fileServer.UploadFile)
 	router.GET("/api/v1/file/:id", fileServer.DownloadFile)
 	router.GET("/api/v1/file/list/:folderId", fileServer.GetFileList)
 	router.DELETE("/api/v1/file/:id", fileServer.DeleteFile)
+	// folders
+	router.POST("/api/v1/folder", fileServer.CreateFolder)
 
 	stopped := make(chan struct{})
 	go func() {
