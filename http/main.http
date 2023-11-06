@@ -1,0 +1,51 @@
+#Files
+
+POST {{serverUrl}}/api/v1/folder/{{folderId}}/file/add
+Content-Type: application/json
+
+{
+  "selected_path": "{{selectedFile}}"
+}
+
+###
+GET {{serverUrl}}/api/v1/file/{{fileId}}?selectedPath={{downloadToPath}}
+
+###
+DELETE {{serverUrl}}/api/v1/file/{{fileId}}
+
+###
+PATCH {{serverUrl}}/api/v1/file/{{fileId}}/rename
+Content-Type: application/json
+
+{
+  "name": "some-good-name"
+}
+
+###
+PATCH {{serverUrl}}/api/v1/file/{{fileId}}/move/{{folderId}}
+
+# Folders
+
+###
+POST {{serverUrl}}/api/v1/folder
+Content-Type: application/json
+
+{
+  "parentFolderId": "{{destFolderId}}",
+  "Name": "some-good-folder"
+}
+
+###
+DELETE {{serverUrl}}/api/v1/folder/{{folderId}}
+
+###
+PATCH {{serverUrl}}/api/v1/folder/{{folderId}}/rename
+Content-Type: application/json
+
+{
+  "name": "another-renamed-folder"
+}
+
+###
+PATCH {{serverUrl}}/api/v1/folder/{{folderId}}/move/{{destFolderId}}
+

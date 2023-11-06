@@ -10,18 +10,19 @@ import (
 	"path/filepath"
 )
 
-type Repository interface {
-	AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (fm domain.FileMeta, err error)
-	ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error
-	DeleteFile(ctx context.Context, id uint) error
-	GetFileList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error)
+type FileRepository interface {
+	Add(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (fm domain.FileMeta, err error)
+	Read(ctx context.Context, id int, readFn func(meta domain.FileMeta, loReader io.Reader) error) error
+	Delete(ctx context.Context, id int) error
+	Move(ctx context.Context, id int, destFolderId domain.FolderId) (domain.FileMeta, error)
+	Rename(ctx context.Context, id int, name string) (domain.FileMeta, error)
 }
 
 type FileService struct {
-	repo Repository
+	repo FileRepository
 }
 
-func NewFileService(repo Repository) FileService {
+func NewFileService(repo FileRepository) FileService {
 	return FileService{repo: repo}
 }
 
@@ -46,7 +47,7 @@ func (s FileService) Create(ctx context.Context, folderId domain.FolderId, selec
 		ChangedAt:    nil,
 	}
 
-	fm, err = s.repo.AddFile(ctx, fileMeta, file)
+	fm, err = s.repo.Add(ctx, fileMeta, file)
 	if err != nil {
 		return domain.FileMeta{}, fmt.Errorf("add file: %w", err)
 	}
@@ -54,8 +55,8 @@ func (s FileService) Create(ctx context.Context, folderId domain.FolderId, selec
 	return fm, nil
 }
 
-func (s FileService) Download(ctx context.Context, fileId uint, selectedPath string) (err error) {
-	err = s.repo.ReadFile(ctx, fileId, func(meta domain.FileMeta, loReader io.Reader) (err error) {
+func (s FileService) Download(ctx context.Context, fileId int, selectedPath string) (err error) {
+	err = s.repo.Read(ctx, fileId, func(meta domain.FileMeta, loReader io.Reader) (err error) {
 		file, err := os.Create(filepath.Join(selectedPath, meta.Name()))
 		if err != nil {
 			return fmt.Errorf("creating file: %w", err)
@@ -82,20 +83,14 @@ func (s FileService) Download(ctx context.Context, fileId uint, selectedPath str
 	return nil
 }
 
-func (s FileService) Delete(ctx context.Context, fileId uint) (err error) {
-	err = s.repo.DeleteFile(ctx, fileId)
-	if err != nil {
-		return fmt.Errorf("deleting file: %w", err)
-	}
-
-	return nil
+func (s FileService) Delete(ctx context.Context, fileId int) (err error) {
+	return s.repo.Delete(ctx, fileId)
 }
 
-func (s FileService) GetList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error) {
-	fileList, err = s.repo.GetFileList(ctx, folderId)
-	if err != nil {
-		return nil, fmt.Errorf("getting file list: %w", err)
-	}
+func (s FileService) Move(ctx context.Context, id int, destFolderId domain.FolderId) (fileMeta domain.FileMeta, err error) {
+	return s.repo.Move(ctx, id, destFolderId)
+}
 
-	return fileList, nil
+func (s FileService) Rename(ctx context.Context, id int, name string) (fileMeta domain.FileMeta, err error) {
+	return s.repo.Rename(ctx, id, name)
 }

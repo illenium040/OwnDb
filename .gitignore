@@ -2,3 +2,4 @@
 docker-compose.yaml
 /bin/
 /scripts/windows/env.ps1
+/http/http-client.env.json

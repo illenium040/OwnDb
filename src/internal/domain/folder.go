@@ -3,28 +3,28 @@ package domain
 import "time"
 
 type Folder struct {
-	id             int
-	parentFolderId *int
+	id             FolderId
+	parentFolderId FolderId
 	name           string
-	dtCreated      time.Time
-	dtChanged      time.Time
+	createdAt      time.Time
+	changedAt      *time.Time
 }
 
-func NewFolder(id int, parentFolderId *int, name string, dtCreated time.Time, dtChanged time.Time) Folder {
+func NewFolder(id FolderId, parentFolderId FolderId, name string, dtCreated time.Time, dtChanged *time.Time) Folder {
 	return Folder{
 		id:             id,
 		parentFolderId: parentFolderId,
 		name:           name,
-		dtCreated:      dtCreated,
-		dtChanged:      dtChanged,
+		createdAt:      dtCreated,
+		changedAt:      dtChanged,
 	}
 }
 
-func (f Folder) Id() int {
+func (f Folder) Id() FolderId {
 	return f.id
 }
 
-func (f Folder) ParentFolderId() *int {
+func (f Folder) ParentFolderId() FolderId {
 	return f.parentFolderId
 }
 
@@ -32,10 +32,10 @@ func (f Folder) Name() string {
 	return f.name
 }
 
-func (f Folder) DtCreated() time.Time {
-	return f.dtCreated
+func (f Folder) CreatedAt() time.Time {
+	return f.createdAt
 }
 
-func (f Folder) DtChanged() time.Time {
-	return f.dtChanged
+func (f Folder) ChangedAt() *time.Time {
+	return f.changedAt
 }

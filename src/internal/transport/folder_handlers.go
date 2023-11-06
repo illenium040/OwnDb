@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"own-db/src/internal/domain"
+	"strconv"
 )
 
 type FolderService interface {
@@ -46,8 +47,7 @@ func (h FolderHandlers) CreateFolder(ctx *gin.Context) {
 
 func (h FolderHandlers) RenameFolder(ctx *gin.Context) {
 	type body struct {
-		FolderId int    `json:"folderId"`
-		Name     string `json:"name"`
+		Name string `json:"name"`
 	}
 
 	var data body
@@ -57,7 +57,13 @@ func (h FolderHandlers) RenameFolder(ctx *gin.Context) {
 		return
 	}
 
-	result, err := h.folderService.Rename(ctx, domain.NewFolderId(data.FolderId), data.Name)
+	folderId, err := strconv.Atoi(ctx.Param("id"))
+	if err != nil {
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("folderId is not a number: %w", err))
+		return
+	}
+
+	result, err := h.folderService.Rename(ctx, domain.NewFolderId(folderId), data.Name)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("rename folder: %w", err))
 		return
@@ -67,44 +73,43 @@ func (h FolderHandlers) RenameFolder(ctx *gin.Context) {
 }
 
 func (h FolderHandlers) MoveFolder(ctx *gin.Context) {
-	type body struct {
-		FolderId     int `json:"folderId"`
-		DestFolderId int `json:"destFolderId"`
-	}
-
-	var data body
-	err := ctx.Bind(&data)
+	folderId, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("reading body: %w", err))
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("folderId is not a number: %w", err))
 		return
 	}
 
-	result, err := h.folderService.Move(ctx, domain.NewFolderId(data.FolderId), domain.NewFolderId(data.DestFolderId))
+	destFolderId, err := strconv.Atoi(ctx.Param("folderId"))
 	if err != nil {
-		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("move folder: %w", err))
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("destFolderId is not a number: %w", err))
 		return
 	}
 
-	ctx.JSON(http.StatusOK, folderFromDomain(result))
+	f, err := h.folderService.Move(ctx, domain.NewFolderId(folderId), domain.NewFolderId(destFolderId))
+	if err != nil {
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("moving folder: %w", err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, folderFromDomain(f))
 }
 
 func (h FolderHandlers) DeleteFolder(ctx *gin.Context) {
-	type body struct {
-		FolderId int `json:"folderId"`
-	}
-
-	var data body
-	err := ctx.Bind(&data)
+	folderId, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("reading body: %w", err))
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("folderId is not a number: %w", err))
 		return
 	}
 
-	err = h.folderService.Delete(ctx, domain.NewFolderId(data.FolderId))
+	err = h.folderService.Delete(ctx, domain.NewFolderId(folderId))
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("rename folder: %w", err))
 		return
 	}
 
 	ctx.Status(http.StatusOK)
+}
+
+func (h FolderHandlers) DownloadFolder(ctx *gin.Context) {
+	// will download folder as selected type of archive
 }

@@ -8,10 +8,14 @@ func NewFolderId(id int) FolderId {
 	return FolderId{id: id}
 }
 
-func (f FolderId) Value() uint {
+func (f FolderId) Value() int {
 	if f.id <= 0 {
 		return 0
 	}
 
-	return uint(f.id)
+	return f.id
+}
+
+func (f FolderId) IsRoot() bool {
+	return f.id == 0
 }

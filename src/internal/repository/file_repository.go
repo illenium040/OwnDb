@@ -21,7 +21,7 @@ func NewFileRepository(con *pgx.Conn) FileRepository {
 	return FileRepository{con: con}
 }
 
-func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (domain.FileMeta, error) {
+func (r FileRepository) Add(ctx context.Context, file dto.FileMeta, fileReader io.Reader) (domain.FileMeta, error) {
 	var fm fileMeta
 	err := db.Tx(ctx, r.con, func(tx pgx.Tx) error {
 		loStorage := tx.LargeObjects()
@@ -125,7 +125,7 @@ func (r FileRepository) AddFile(ctx context.Context, file dto.FileMeta, fileRead
 	return fileMetaToDomain(fm), nil
 }
 
-func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta domain.FileMeta, loReader io.Reader) error) error {
+func (r FileRepository) Read(ctx context.Context, id int, readFn func(meta domain.FileMeta, loReader io.Reader) error) error {
 	return db.Tx(ctx, r.con, func(tx pgx.Tx) (err error) {
 		loStorage := tx.LargeObjects()
 
@@ -148,7 +148,7 @@ func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta 
 			from main.file_meta fm 
 			    inner join main.file_data fd 
 			        on fd.id = fm.file_data_id
-			where fd.id = @id
+			where fm.id = @id
 			`,
 			pgx.NamedArgs{
 				"id": id,
@@ -183,7 +183,7 @@ func (r FileRepository) ReadFile(ctx context.Context, id uint, readFn func(meta 
 	})
 }
 
-func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
+func (r FileRepository) Delete(ctx context.Context, id int) error {
 	return db.Tx(ctx, r.con, func(tx pgx.Tx) error {
 		_, err := tx.Exec(
 			ctx,
@@ -233,7 +233,7 @@ func (r FileRepository) DeleteFile(ctx context.Context, id uint) error {
 	})
 }
 
-func (r FileRepository) GetFileList(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error) {
+func (r FileRepository) List(ctx context.Context, folderId domain.FolderId) (fileList []domain.FileMeta, err error) {
 	rows, err := r.con.Query(
 		ctx,
 		`select 
@@ -278,4 +278,68 @@ func (r FileRepository) GetFileList(ctx context.Context, folderId domain.FolderI
 	}
 
 	return fileList, nil
+}
+
+func (r FileRepository) Move(ctx context.Context, id int, destFolderId domain.FolderId) (domain.FileMeta, error) {
+	var fm fileMeta
+	err := r.con.QueryRow(
+		ctx,
+		`
+		update main.file_meta 
+		set folder_id = @destFolderId
+		where id = @id
+		returning id, file_data_id, folder_id, name, extension, original_path, size, dt_created, dt_changed
+		`,
+		pgx.NamedArgs{
+			"id":           id,
+			"destFolderId": destFolderId.Value(),
+		},
+	).Scan(
+		&fm.Id,
+		&fm.DataId,
+		&fm.FolderId,
+		&fm.Name,
+		&fm.Extension,
+		&fm.OriginalPath,
+		&fm.Size,
+		&fm.CreatedAt,
+		&fm.ChangedAt,
+	)
+	if err != nil {
+		return domain.FileMeta{}, fmt.Errorf("updating file folder: %w", err)
+	}
+
+	return fileMetaToDomain(fm), nil
+}
+
+func (r FileRepository) Rename(ctx context.Context, id int, name string) (domain.FileMeta, error) {
+	var fm fileMeta
+	err := r.con.QueryRow(
+		ctx,
+		`
+		update main.file_meta
+		set name = @name
+		where id = @id
+		returning id, file_data_id, folder_id, name, extension, original_path, size, dt_created, dt_changed
+		`,
+		pgx.NamedArgs{
+			"id":   id,
+			"name": name,
+		},
+	).Scan(
+		&fm.Id,
+		&fm.DataId,
+		&fm.FolderId,
+		&fm.Name,
+		&fm.Extension,
+		&fm.OriginalPath,
+		&fm.Size,
+		&fm.CreatedAt,
+		&fm.ChangedAt,
+	)
+	if err != nil {
+		return domain.FileMeta{}, fmt.Errorf("updating file name: %w", err)
+	}
+
+	return fileMetaToDomain(fm), nil
 }

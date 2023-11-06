@@ -38,8 +38,13 @@ func run() error {
 	}
 
 	fileRepo := repository.NewFileRepository(con)
+	folderRepo := repository.NewFolderRepository(con)
+
 	fileService := services.NewFileService(fileRepo)
-	fileServer := transport.NewFileHandlers(fileService)
+	folderService := services.NewFolderService(folderRepo)
+
+	fileHandlers := transport.NewFileHandlers(fileService)
+	folderHandlers := transport.NewFolderHandlers(folderService)
 
 	router := gin.Default()
 
@@ -52,12 +57,17 @@ func run() error {
 	}
 
 	// files
-	router.POST("/api/v1/folder/:folderId/file/add", fileServer.UploadFile)
-	router.GET("/api/v1/file/:id", fileServer.DownloadFile)
-	router.GET("/api/v1/file/list/:folderId", fileServer.GetFileList)
-	router.DELETE("/api/v1/file/:id", fileServer.DeleteFile)
+	router.POST("/api/v1/folder/:folderId/file/add", fileHandlers.UploadFile)
+	router.GET("/api/v1/file/:id", fileHandlers.DownloadFile)
+	router.DELETE("/api/v1/file/:id", fileHandlers.DeleteFile)
+	router.PATCH("/api/v1/file/:id/rename", fileHandlers.RenameFile)
+	router.PATCH("/api/v1/file/:id/move/:folderId", fileHandlers.MoveFile)
+
 	// folders
-	router.POST("/api/v1/folder", fileServer.CreateFolder)
+	router.POST("/api/v1/folder", folderHandlers.CreateFolder)
+	router.DELETE("/api/v1/folder/:id", folderHandlers.DeleteFolder)
+	router.PATCH("/api/v1/folder/:id/rename", folderHandlers.RenameFolder)
+	router.PATCH("/api/v1/folder/:id/move/:folderId", folderHandlers.MoveFolder)
 
 	stopped := make(chan struct{})
 	go func() {
