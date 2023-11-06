@@ -26,10 +26,18 @@ func (s FolderService) Create(ctx context.Context, parentFolderId domain.FolderI
 }
 
 func (s FolderService) Rename(ctx context.Context, id domain.FolderId, name string) (domain.Folder, error) {
+	if id.IsRoot() {
+		return domain.Folder{}, fmt.Errorf("cann't rename a root folder")
+	}
+
 	return s.repo.Rename(ctx, id, name)
 }
 
 func (s FolderService) Move(ctx context.Context, id domain.FolderId, destFolderId domain.FolderId) (domain.Folder, error) {
+	if id.IsRoot() {
+		return domain.Folder{}, fmt.Errorf("cann't move a root folder")
+	}
+
 	return s.repo.Move(ctx, id, destFolderId)
 }
 
